@@ -1,151 +1,224 @@
-import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+from datetime import date, datetime, time, timedelta
+from uuid import uuid4
 
-# Set the title and favicon that appear in the Browser's tab bar.
+import pandas as pd
+import streamlit as st
+
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title="Aklımda",
+    page_icon="🧠",
 )
 
+
 # -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Utilities
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def init_state():
+    if "reminders" in st.session_state:
+        return
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    today = date.today()
+    st.session_state.reminders = [
+        {
+            "id": str(uuid4()),
+            "title": "KPSS deneme sınavı",
+            "category": "KPSS",
+            "date": today + timedelta(days=1),
+            "time": time(10, 0),
+            "notes": "Sonuçları not et",
+            "done": False,
+        },
+        {
+            "id": str(uuid4()),
+            "title": "İlaç iç - sabah dozu",
+            "category": "İlaç",
+            "date": today,
+            "time": time(8, 30),
+            "notes": "Kahvaltıdan sonra",
+            "done": False,
+        },
+        {
+            "id": str(uuid4()),
+            "title": "YKS geometri tekrar",
+            "category": "YKS",
+            "date": today + timedelta(days=3),
+            "time": time(19, 0),
+            "notes": "Konu: çember ve daire",
+            "done": False,
+        },
+        {
+            "id": str(uuid4()),
+            "title": "Haftalık toplantı",
+            "category": "Toplantı",
+            "date": today + timedelta(days=2),
+            "time": time(14, 0),
+            "notes": "Sunum dosyasını hazırla",
+            "done": False,
+        },
+    ]
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+def add_reminder(title: str, category: str, date_value: date, time_value: time, notes: str):
+    st.session_state.reminders.append(
+        {
+            "id": str(uuid4()),
+            "title": title.strip(),
+            "category": category,
+            "date": date_value,
+            "time": time_value,
+            "notes": notes.strip(),
+            "done": False,
+        }
     )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
 
-    return gdp_df
+def toggle_completion(reminder_id: str, done: bool):
+    for reminder in st.session_state.reminders:
+        if reminder["id"] == reminder_id:
+            reminder["done"] = done
+            break
 
-gdp_df = get_gdp_data()
+
+def build_dataframe(reminders):
+    df = pd.DataFrame(reminders)
+    if df.empty:
+        return df
+
+    df["datetime"] = df.apply(
+        lambda row: datetime.combine(row["date"], row["time"]), axis=1
+    )
+    df["Durum"] = df["done"].map({True: "Tamamlandı", False: "Aktif"})
+    df = df.sort_values(["done", "datetime"])
+    df["Tarih"] = df["datetime"].dt.strftime("%d %B %Y")
+    df["Saat"] = df["datetime"].dt.strftime("%H:%M")
+    df = df[
+        [
+            "title",
+            "category",
+            "Tarih",
+            "Saat",
+            "notes",
+            "Durum",
+            "id",
+            "done",
+        ]
+    ].rename(
+        columns={
+            "title": "Başlık",
+            "category": "Kategori",
+            "notes": "Notlar",
+        }
+    )
+    return df
+
 
 # -----------------------------------------------------------------------------
-# Draw the actual page
+# Page content
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+init_state()
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
+st.title("🧠 Aklımda")
+st.caption(
+    "KPSS, YKS veya ilaç takibi gibi günlük işlerin unutulmaması için pratik hatırlatıcı."
 )
 
-''
-''
+st.divider()
 
+col1, col2, col3 = st.columns(3)
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
+reminders_df = build_dataframe(st.session_state.reminders)
+aktif_sayisi = 0 if reminders_df.empty else reminders_df["Durum"].eq("Aktif").sum()
 
-st.header(f'GDP in {to_year}', divider='gray')
+today = date.today()
+today_tasks = 0
+if not reminders_df.empty:
+    today_tasks = reminders_df[
+        (reminders_df["Tarih"] == today.strftime("%d %B %Y"))
+        & (reminders_df["Durum"] == "Aktif")
+    ].shape[0]
 
-''
+total = len(st.session_state.reminders)
 
-cols = st.columns(4)
+col1.metric("Toplam Hatırlatıcı", total)
+col2.metric("Aktif Görev", aktif_sayisi)
+col3.metric("Bugün", today_tasks)
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
+st.divider()
 
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+add_tab, list_tab = st.tabs(["Yeni hatırlatıcı ekle", "Planlarım"])
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+with add_tab:
+    st.subheader("Yeni hatırlatıcı oluştur")
+    with st.form("new_reminder"):
+        title = st.text_input("Başlık", placeholder="Örn. KPSS deneme çöz")
+        category = st.selectbox(
+            "Kategori",
+            ["KPSS", "YKS", "İlaç", "İş", "Toplantı", "Özel"],
+        )
+        col_left, col_right = st.columns(2)
+        with col_left:
+            reminder_date = st.date_input("Tarih", value=date.today())
+        with col_right:
+            reminder_time = st.time_input("Saat", value=time(9, 0))
+        notes = st.text_area("Notlar", placeholder="Ek not bırakabilirsiniz")
+
+        submitted = st.form_submit_button("Hatırlatıcıyı kaydet")
+
+        if submitted:
+            if not title.strip():
+                st.warning("Başlık boş olamaz")
+            else:
+                add_reminder(title, category, reminder_date, reminder_time, notes)
+                st.success("Hatırlatıcı eklendi")
+
+with list_tab:
+    st.subheader("Tüm hatırlatıcılar")
+    if reminders_df.empty:
+        st.info("Henüz hatırlatıcı yok. Yukarıdan bir tane ekleyin!")
+    else:
+        search = st.text_input("Başlıkta ara", placeholder="YKS deneme...", key="search")
+        chosen_categories = st.multiselect(
+            "Kategori filtrele",
+            options=sorted(reminders_df["Kategori"].unique()),
+            default=list(sorted(reminders_df["Kategori"].unique())),
+        )
+        status_filter = st.radio(
+            "Durum",
+            options=["Hepsi", "Aktif", "Tamamlandı"],
+            horizontal=True,
+        )
+
+        filtered = reminders_df.copy()
+        if search:
+            filtered = filtered[filtered["Başlık"].str.contains(search, case=False, na=False)]
+        if chosen_categories:
+            filtered = filtered[filtered["Kategori"].isin(chosen_categories)]
+        if status_filter != "Hepsi":
+            filtered = filtered[filtered["Durum"] == status_filter]
+
+        st.markdown("### Liste")
+        if filtered.empty:
+            st.info("Filtrelere uyan hatırlatıcı bulunamadı")
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+            for _, row in filtered.iterrows():
+                container = st.container(border=True)
+                col_a, col_b = container.columns([3, 1])
+                with col_a:
+                    st.write(f"**{row['Başlık']}** · {row['Kategori']}")
+                    st.caption(f"{row['Tarih']} · {row['Saat']}")
+                    if row["Notlar"]:
+                        st.write(row["Notlar"])
+                with col_b:
+                    done = row["Durum"] == "Tamamlandı"
+                    checked = st.checkbox("Tamamlandı", value=done, key=row["id"])
+                    if checked != done:
+                        toggle_completion(row["id"], checked)
+                        st.rerun()
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
+        st.divider()
+        st.markdown("### Tablo görünümü")
+        st.dataframe(
+            filtered[["Başlık", "Kategori", "Tarih", "Saat", "Notlar", "Durum"]],
+            use_container_width=True,
+            hide_index=True,
         )
