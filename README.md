@@ -1,19 +1,27 @@
-# :earth_americas: GDP dashboard template
+# 🧠 Aklımda hatırlatıcı uygulaması
 
-A simple Streamlit app showing the GDP of different countries in the world.
+KPSS, YKS, ilaç takibi ve günlük işler için basit bir hatırlatıcı deneyimi.
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
+## Yerelde çalıştırma
 
-### How to run it on your own machine
+1. Bağımlılıkları kurun:
 
-1. Install the requirements
-
-   ```
-   $ pip install -r requirements.txt
+   ```bash
+   pip install -r requirements.txt
    ```
 
-2. Run the app
+2. Uygulamayı başlatın:
 
+   ```bash
+   streamlit run streamlit_app.py
    ```
-   $ streamlit run streamlit_app.py
-   ```
+
+## Streamlit Cloud üzerinde yayınlama
+
+1. **Kodu GitHub'a gönderin.** Depoyu kendi GitHub hesabınıza alın ve değişikliklerinizi push edin.
+2. **[Streamlit Cloud](https://streamlit.io/cloud) hesabı açın** ve "New app" butonuna tıklayın.
+3. **Depoyu ve dalı seçin.** `streamlit_app.py` dosyasının yer aldığı dalı ve dosya yolunu belirtin.
+4. **Gizli anahtarları ekleyin (isteğe bağlı).** Uygulamanız API anahtarları kullanıyorsa "Secrets" bölümünden tanımlayın.
+5. **Deploy butonuna basın.** Uygulama birkaç dakika içinde `https://<proje-adı>.streamlit.app` adresinde yayınlanır.
+
+Güncelleme yaptığınızda depoya push etmeniz yeterlidir; Streamlit Cloud otomatik olarak yeniden deploy eder.
